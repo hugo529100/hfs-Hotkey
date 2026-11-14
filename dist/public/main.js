@@ -668,37 +668,10 @@
         }
     }
 
-    // ==================== Tile mode memory + 快捷键 ====================
-    const config = (typeof HFS !== 'undefined' && HFS.pluginConfig) ? HFS.pluginConfig : {};
-    const ENABLE_TILE_MODE_MEMORY = config.enableTileModeMemory !== false;
-    const EXPIRE_HOURS = config.expireHours ?? 24;
-    const EXPIRE = EXPIRE_HOURS === 0 ? Infinity : EXPIRE_HOURS * 60 * 60 * 1000;
-    const SERVER_TILE_SIZE = config.serverTileSize;
-
-    const TILE_STORAGE_KEY = 'short-folder-tile-mode';
+    // ==================== Tile size 快捷键 ====================
     const TILE_MIN = 0;
     const TILE_MAX = 10;
 
-    let tileChanging = false;
-    let currentTileUri = '';
-    let saveTimeout = null;
-    let lastSavedTileSize = undefined;
-    let isNavigating = false;
-
-    function loadTileData() {
-        try {
-            const raw = localStorage.getItem(TILE_STORAGE_KEY);
-            if (!raw) return {};
-            return JSON.parse(raw);
-        } catch { return {}; }
-    }
-    function saveTileData(data) {
-        localStorage.setItem(TILE_STORAGE_KEY, JSON.stringify(data));
-    }
-    function getTileModeKey(path) {
-        const cleanPath = path.split('?')[0];
-        return cleanPath.endsWith('/') ? cleanPath : cleanPath + '/';
-    }
     function getTileSizeFromState() {
         if (typeof HFS !== 'undefined' && HFS.state &&
             HFS.state.tile_size !== undefined) return HFS.state.tile_size;
@@ -706,9 +679,7 @@
     }
     function setTileSize(value) {
         if (typeof HFS !== 'undefined' && HFS.state) {
-            tileChanging = true;
             HFS.state.tile_size = value;
-            tileChanging = false;
         }
     }
     function applyTileSizeToDOM(size) {
@@ -716,76 +687,6 @@
             const listWrapper = document.querySelector('.list-wrapper');
             if (listWrapper) listWrapper.style.setProperty('--tile-size', size);
         } catch (e) {}
-    }
-    function getServerDefaultTileSize() { return SERVER_TILE_SIZE; }
-    function cleanExpiredTileData() {
-        if (EXPIRE === Infinity) return;
-        const now = Date.now();
-        const data = loadTileData();
-        let changed = false;
-        for (const key in data) {
-            if (now - data[key].time > EXPIRE) {
-                delete data[key]; changed = true;
-            }
-        }
-        if (changed) saveTileData(data);
-    }
-    function scheduleSave() {
-        if (saveTimeout) clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(() => {
-            if (currentTileUri) {
-                const currentSize = getTileSizeFromState();
-                if (currentSize !== undefined && currentSize !== lastSavedTileSize) {
-                    saveTileModeForPath(currentTileUri);
-                    lastSavedTileSize = currentSize;
-                }
-            }
-            saveTimeout = null;
-        }, 300);
-    }
-    function immediateSave() {
-        if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
-        if (currentTileUri) {
-            const currentSize = getTileSizeFromState();
-            if (currentSize !== undefined && currentSize !== lastSavedTileSize) {
-                saveTileModeForPath(currentTileUri);
-                lastSavedTileSize = currentSize;
-            }
-        }
-    }
-    function loadTileModeForPath(path) {
-        if (!ENABLE_TILE_MODE_MEMORY) return;
-        if (typeof HFS === 'undefined' || !HFS.state) return;
-        cleanExpiredTileData();
-        const key = getTileModeKey(path);
-        const data = loadTileData();
-        const saved = data[key];
-        const defaultSize = getServerDefaultTileSize() || 2;
-        if (saved !== undefined && saved.size !== undefined) {
-            if (EXPIRE !== Infinity && Date.now() - saved.time > EXPIRE) {
-                delete data[key]; saveTileData(data);
-                setTileSize(defaultSize); applyTileSizeToDOM(defaultSize);
-                lastSavedTileSize = defaultSize; return;
-            }
-            if (ENABLE_TILE_MODE_MEMORY) {
-                data[key].time = Date.now(); saveTileData(data);
-            }
-            setTileSize(saved.size); applyTileSizeToDOM(saved.size);
-            lastSavedTileSize = saved.size; return;
-        }
-        setTileSize(defaultSize); applyTileSizeToDOM(defaultSize);
-        lastSavedTileSize = defaultSize;
-    }
-    function saveTileModeForPath(path) {
-        if (!ENABLE_TILE_MODE_MEMORY) return;
-        if (typeof HFS === 'undefined' || !HFS.state) return;
-        const key = getTileModeKey(path);
-        const currentSize = getTileSizeFromState();
-        if (currentSize === undefined) return;
-        const data = loadTileData();
-        data[key] = { size: currentSize, time: Date.now() };
-        saveTileData(data);
-        lastSavedTileSize = currentSize;
     }
     function applyTileSizeViaShortcut(size) {
         const clamped = Math.max(TILE_MIN, Math.min(TILE_MAX, size));
@@ -804,10 +705,6 @@
                 if (label) label.textContent = 'Tiles mode: ' + clamped;
             }
         } catch (e) {}
-        if (ENABLE_TILE_MODE_MEMORY && currentTileUri) {
-            saveTileModeForPath(currentTileUri);
-            lastSavedTileSize = clamped;
-        }
     }
     function isInEditableField(el) {
         if (!el) return false;
@@ -859,47 +756,6 @@
             applyTileSizeViaShortcut(10);
             return;
         }
-    }
-
-    function initTileModeModule() {
-        if (!ENABLE_TILE_MODE_MEMORY) return;
-        if (typeof HFS === 'undefined' || !HFS.watchState) return;
-
-        setTimeout(function() {
-            const currentUri = HFS.state ? HFS.state.uri : location.pathname;
-            if (currentUri) {
-                const path = currentUri.split('?')[0];
-                currentTileUri = getTileModeKey(path);
-                loadTileModeForPath(path);
-                const currentSize = getTileSizeFromState();
-                if (currentSize !== undefined) lastSavedTileSize = currentSize;
-            }
-        }, 100);
-
-        HFS.watchState('uri', function(uri) {
-            if (!uri) return;
-            const path = uri.split('?')[0];
-            const newKey = getTileModeKey(path);
-            if (currentTileUri === newKey) return;
-            isNavigating = true;
-            immediateSave();
-            currentTileUri = newKey;
-            loadTileModeForPath(path);
-            const currentSize = getTileSizeFromState();
-            if (currentSize !== undefined) lastSavedTileSize = currentSize;
-            setTimeout(() => { isNavigating = false; }, 300);
-        });
-
-        HFS.watchState('tile_size', function(value) {
-            if (!ENABLE_TILE_MODE_MEMORY) return;
-            if (tileChanging) return;
-            if (!currentTileUri) return;
-            if (isNavigating) return;
-            if (value !== undefined) applyTileSizeToDOM(value);
-            scheduleSave();
-        });
-
-        window.addEventListener('beforeunload', () => immediateSave());
     }
 
     // ==================== Help 懒加载 + User panel 按钮 ====================
@@ -1044,16 +900,9 @@ div.dialog[aria-modal="true"] .hotkey-user-button { margin-top: 1em; }
 
     // ==================== 初始化 ====================
     function init() {
-        initTileModeModule();
         if (typeof HFS !== 'undefined') {
             HFS.short = {
                 tile: {
-                    save: function() { if (ENABLE_TILE_MODE_MEMORY && currentTileUri) immediateSave(); },
-                    load: function(path) { if (ENABLE_TILE_MODE_MEMORY) loadTileModeForPath(path || location.pathname); },
-                    cleanExpired: cleanExpiredTileData,
-                    getStorage: function() { return loadTileData(); },
-                    getServerDefault: function() { return getServerDefaultTileSize(); },
-                    refresh: function() { if (currentTileUri) loadTileModeForPath(currentTileUri); },
                     getCurrentSize: function() { return getTileSizeFromState(); },
                     setSize: applyTileSizeViaShortcut,
                 },

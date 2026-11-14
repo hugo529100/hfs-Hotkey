@@ -1,5 +1,5 @@
 exports.repo = "Hug3O/Hotkey"
-exports.version = 1.6
+exports.version = 1.7
 exports.apiRequired = 8.87
 exports.hasConfig = true
 exports.frontend_js = 'main.js'
