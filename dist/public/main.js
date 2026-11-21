@@ -22,6 +22,8 @@
     const MENU_CONTAINER_SELECTOR = '.file-menu';
     const FILE_DIALOG_SELECTOR = '.dialog-backdrop.file-dialog';
 
+    const SELECT_BUTTON_SELECTOR = '#select-button';
+
     const ACTIONS = [
         'comment', 'open', 'download', 'cut', 'rename',
         'delete', 'zoom', 'fullscreen', 'shuffle', 'repeat',
@@ -38,7 +40,7 @@
         Delete: 'delete',
         z: 'zoom',
         f: 'fullscreen',
-        s: 'shuffle',
+        // s: 不再映射到 shuffle，改为单独处理 → #select-button
         p: 'repeat',
         l: 'copy-link',
     };
@@ -315,6 +317,13 @@
         return items;
     }
 
+    function triggerSelectButton() {
+        const sel = document.querySelector(SELECT_BUTTON_SELECTOR);
+        if (!sel) return false;
+        sel.click();
+        return true;
+    }
+
     function handleFileShowKeys(e) {
         if (Context.isFormInput()) return false;
 
@@ -330,6 +339,16 @@
         }
 
         if (e.key === 'Enter' || e.key === 'Backspace') return false;
+
+        // 带修饰键的组合（Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+D / Ctrl+R / Ctrl+F …）
+        // 一律不拦截，交给浏览器原生行为（复制、剪切、粘贴、书签、刷新、查找等）。
+        if (e.ctrlKey || e.metaKey || e.altKey) return false;
+
+        // S → 选择模式（#select-button），替代原先的 shuffle
+        if (e.key === 's') {
+            if (triggerSelectButton()) { swallow(e); return true; }
+            return false;
+        }
 
         const action = SHORTCUTS[e.key];
         if (!action) return false;
@@ -924,6 +943,7 @@ div.dialog[aria-modal="true"] .hotkey-user-button { margin-top: 1em; }
         toggleMenu: () => clickMenuButton({ toggle: true }),
         clickItem:  clickFileMenuItem,
         listItems:  listAvailableMenuItems,
+        select:     triggerSelectButton,
         navigatePaging: dir => {
             const fake = { preventDefault(){}, stopPropagation(){}, stopImmediatePropagation(){} };
             return dir === 'left' ? navigatePaging('left', fake) : navigatePaging('right', fake);

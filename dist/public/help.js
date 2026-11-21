@@ -196,10 +196,11 @@ body.theme-dark .hotkey-help-body::-webkit-scrollbar-thumb {
                 row(['Del'], 'Delete'),
                 row(['Z'], 'Zoom'),
                 row(['F'], 'Fullscreen'),
-                row(['S'], 'Shuffle'),
+                row(['S'], 'Select — enter selection mode (Zip / Delete become available)'),
                 row(['P'], 'Repeat'),
                 row(['L'], 'Copy link'),
                 note('Arrow keys inside the preview are left to the image / video viewer (album navigation, video seek, etc.).'),
+                note('Combinations with <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> / <kbd>Alt</kbd> are never intercepted, so <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>X</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd> keep working as browser-native copy / cut / paste.'),
             ]),
             section('Arrow keys (plain UI)', [
                 note('<b>No dialog / no preview / no menu:</b>'),
