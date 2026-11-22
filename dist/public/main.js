@@ -3,8 +3,23 @@
 
     const LOG = '[Hotkey]';
 
+    // ==================== 配置 ====================
+    // HFS 只會把標記 frontend: true 的設定透過 HFS.getPluginConfig() 傳給前端。
+    const HOTKEY_CONFIG = readPluginConfig();
+
+    function readPluginConfig() {
+        if (typeof HFS === 'undefined') return {};
+        try {
+            if (typeof HFS.getPluginConfig === 'function') {
+                const cfg = HFS.getPluginConfig();
+                if (cfg && typeof cfg === 'object') return cfg;
+            }
+        } catch (e) {}
+        return (HFS.pluginConfig && typeof HFS.pluginConfig === 'object') ? HFS.pluginConfig : {};
+    }
+
     // ==================== 状态 ====================
-    let enabled = true;
+    let enabled = HOTKEY_CONFIG.enabled !== false;
     let hiddenFileDialog = null;
     let lastCommentSubmitAt = 0;
 
@@ -687,9 +702,18 @@
         }
     }
 
-    // ==================== Tile size 快捷键 ====================
+    // ==================== Tile size 快捷鍵（只負責套用，不負責記憶） ====================
+    // 每資料夾記憶、過期時間、伺服器預設值全部由 Tiles-plus 負責。
+    // 這裡只按鍵 → 呼叫 HFS.short.tile.setSize()；若 Tiles-plus 不在，
+    // 才退回直接寫 HFS.state 並同步原生控制項。
     const TILE_MIN = 0;
     const TILE_MAX = 10;
+
+    function clampTileSize(value) {
+        const n = Number(value);
+        if (!isFinite(n)) return null;
+        return Math.max(TILE_MIN, Math.min(TILE_MAX, Math.round(n)));
+    }
 
     function getTileSizeFromState() {
         if (typeof HFS !== 'undefined' && HFS.state &&
@@ -707,36 +731,49 @@
             if (listWrapper) listWrapper.style.setProperty('--tile-size', size);
         } catch (e) {}
     }
-    function applyTileSizeViaShortcut(size) {
-        const clamped = Math.max(TILE_MIN, Math.min(TILE_MAX, size));
-        setTileSize(clamped);
-        applyTileSizeToDOM(clamped);
+    function syncTileSizeControl(size) {
         try {
             const panel = document.getElementById('option-tile-size');
-            if (panel) {
-                const range = panel.querySelector('input[type="range"]');
-                if (range) {
-                    range.value = String(clamped);
-                    range.dispatchEvent(new Event('input', { bubbles: true }));
-                    range.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                const label = panel.querySelector('div');
-                if (label) label.textContent = 'Tiles mode: ' + clamped;
+            if (!panel) return;
+            const range = panel.querySelector('input[type="range"]');
+            if (range) range.value = String(size);
+            const nodes = panel.querySelectorAll('div, span, label');
+            for (const el of nodes) {
+                if (!/tiles?\s*mode/i.test((el.textContent || '').trim())) continue;
+                // 只改純文字標籤，避免把別人的子元素洗掉。
+                if (el.children && el.children.length) continue;
+                el.textContent = 'Tiles mode: ' + size;
+                break;
             }
         } catch (e) {}
     }
-    function isInEditableField(el) {
-        if (!el) return false;
-        const tag = el.tagName.toLowerCase();
-        if (tag === 'input') {
-            const type = (el.type || '').toLowerCase();
-            if (['checkbox','radio','button','submit','reset','image','range'].includes(type)) return false;
-            return true;
-        }
-        if (tag === 'textarea' || tag === 'select') return true;
-        return !!el.isContentEditable;
+
+    function getTileMemoryApi() {
+        if (typeof HFS === 'undefined' || !HFS.short) return null;
+        const tile = HFS.short.tile;
+        if (!tile || typeof tile.setSize !== 'function') return null;
+        return tile;
     }
+
+    function applyTileSizeViaShortcut(size) {
+        const clamped = clampTileSize(size);
+        if (clamped === null) return;
+
+        const memory = getTileMemoryApi();
+        if (memory) {
+            // Tiles-plus：套用尺寸 + 更新 UI + 依設定寫入每資料夾記憶
+            memory.setSize(clamped);
+            return;
+        }
+
+        setTileSize(clamped);
+        applyTileSizeToDOM(clamped);
+        syncTileSizeControl(clamped);
+    }
+
     function handleTileShortcut(e) {
+        if (!enabled) return;
+        if (typeof e.key !== 'string') return;
         const mod = e.ctrlKey || e.metaKey;
         if (!mod) return;
         if (e.altKey || e.shiftKey) return;
@@ -746,35 +783,25 @@
             e.key === 'Home' || e.key === 'End' || e.key === ' ') {
             return;
         }
-        const active = document.activeElement;
-        if (isInEditableField(active)) return;
+        if (Context.isFormInput()) return;
 
+        let target = null;
         if (e.key === '0') {
-            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-            applyTileSizeViaShortcut(10);
-            return;
+            target = 10;                       // 最大磚塊
+        } else if (/^[1-9]$/.test(e.key)) {
+            target = parseInt(e.key, 10);
+        } else if (e.key === '·' || e.key === '`' || e.key === '.' ||
+                   e.code === 'Backquote' || e.code === 'IntlBackslash' || e.code === 'Period') {
+            target = 0;                        // 清單模式
+        } else if (e.key === '-' || e.key === '_' || e.code === 'Minus') {
+            target = 0;
+        } else if (e.key === '=' || e.key === '+' || e.code === 'Equal') {
+            target = 10;
         }
-        if (/^[1-9]$/.test(e.key)) {
-            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-            applyTileSizeViaShortcut(parseInt(e.key, 10));
-            return;
-        }
-        if (e.key === '·' || e.key === '`' || e.key === '.' ||
-            e.code === 'Backquote' || e.code === 'IntlBackslash' || e.code === 'Period') {
-            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-            applyTileSizeViaShortcut(0);
-            return;
-        }
-        if (e.key === '-' || e.key === '_' || e.code === 'Minus') {
-            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-            applyTileSizeViaShortcut(0);
-            return;
-        }
-        if (e.key === '=' || e.key === '+' || e.code === 'Equal') {
-            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-            applyTileSizeViaShortcut(10);
-            return;
-        }
+        if (target === null) return;
+
+        swallow(e);
+        applyTileSizeViaShortcut(target);
     }
 
     // ==================== Help 懒加载 + User panel 按钮 ====================
@@ -919,14 +946,15 @@ div.dialog[aria-modal="true"] .hotkey-user-button { margin-top: 1em; }
 
     // ==================== 初始化 ====================
     function init() {
-        if (typeof HFS !== 'undefined') {
-            HFS.short = {
-                tile: {
-                    getCurrentSize: function() { return getTileSizeFromState(); },
-                    setSize: applyTileSizeViaShortcut,
-                },
-            };
-        }
+        if (typeof HFS === 'undefined') return;
+
+        // 只新增自己的命名空間，不覆蓋 Tiles-plus 的 HFS.short.tile / HFS.short.reload。
+        HFS.short = HFS.short || {};
+        HFS.short.hotkey = {
+            setTileSize: applyTileSizeViaShortcut,
+            getTileSize: getTileSizeFromState,
+            openHelp: openHelp,
+        };
     }
     let initialized = false;
     function safeInit() {

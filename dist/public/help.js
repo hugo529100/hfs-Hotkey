@@ -222,7 +222,7 @@ body.theme-dark .hotkey-help-body::-webkit-scrollbar-thumb {
                 row(['Ctrl', '1..9'], 'Set tile size to 1..9'),
                 row(['Ctrl', '·', '.', '-'], 'Set tile size to 0 (list mode)'),
                 row(['Ctrl', '='], 'Set tile size to 10 (largest tiles)'),
-                note('On macOS use <kbd>Cmd</kbd> instead of Ctrl. The shortcut also updates the #option-tile-size range UI. Whether the value is remembered across visits is left to HFS itself.'),
+                note('On macOS use <kbd>Cmd</kbd> instead of Ctrl. This shortcut only <b>applies</b> the size and refreshes the #option-tile-size control. Remembering it per folder and the expiry time are handled by the <b>Tiles-plus</b> plugin; folders without a remembered value use HFS\'s config.yaml tile_size.'),
             ]),
             section('Tips', [
                 note('Shortcuts are ignored while typing in an input field.'),

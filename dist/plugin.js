@@ -1,9 +1,9 @@
 exports.repo = "Hug3O/Hotkey"
-exports.version = 1.8
+exports.version = 2.4
 exports.apiRequired = 8.87
 exports.hasConfig = true
 exports.frontend_js = 'main.js'
-exports.description = "Unified keyboard helper for HFS (Enter/Esc, comment Enter saves without closing preview, file-show shortcuts, smooth arrow scrolling, paging navigation incl. PageUp/PageDown/Home/End, and Ctrl+0..9 tile size)"
+exports.description = "Unified keyboard helper for HFS (Enter/Esc, comment Enter saves without closing preview, file-show shortcuts, smooth arrow scrolling, paging navigation incl. PageUp/PageDown/Home/End, and Ctrl+0..9 tile size). Tile-size memory (per folder, expiry, server default) is provided by the Tiles-plus plugin."
 
 exports.config = {
 
@@ -11,8 +11,10 @@ exports.config = {
         type: 'boolean',
         label: 'Enable Hotkey',
         defaultValue: true,
+        frontend: true,
         helperText: `
-Unified keyboard helper.
+Unified keyboard helper. Shortcuts only: remembering a tile size per
+folder is handled by the Tiles-plus plugin.
 
 Dialog keys:
   Enter      Confirm (OK / Continue)
@@ -24,7 +26,8 @@ Dialog keys:
 File-show keys (preview open):
   M  Menu       C  Comment    O  Open      D  Download
   X  Cut        R  Rename     Del Delete   Z  Zoom
-  F  Fullscreen S  Shuffle    P  Repeat    L  Copy link
+  F  Fullscreen S  Select     P  Repeat    L  Copy link
+  (Select toggles selection mode; Zip / Delete become available.)
 
 Arrow keys:
   Plain UI (no dialog / no preview / no menu):
@@ -42,41 +45,28 @@ Arrow keys:
   File preview, menu open:
     Up / Down / Left / Right   Move focus between menu items
 
-Tile size (tile mode memory):
-  Ctrl + 0..9      Set tile size to 0..9 (0 = list mode)
-  Ctrl + -         Set tile size to 0  (list mode)
+Tile size (apply only):
+  Ctrl + 1..9      Set tile size to 1..9
+  Ctrl + 0         Set tile size to 10 (largest tiles)
   Ctrl + =         Set tile size to 10 (largest tiles)
+  Ctrl + -         Set tile size to 0  (list mode)
+  Ctrl + .  or  ·  Set tile size to 0  (list mode)
   (Cmd on macOS works the same as Ctrl.)
-  The shortcut writes to HFS.state.tile_size, updates the
-  #option-tile-size range UI, and saves per-folder memory.
+  The shortcut writes HFS.state.tile_size and refreshes the
+  #option-tile-size control. Whether the value is remembered per
+  folder and how long it is kept are settings of the Tiles-plus
+  plugin (tile mode memory); folders without a remembered value use
+  HFS's own config.yaml tile_size.
 
 Scrolling uses a rAF-based velocity engine, so holding an arrow key
 produces a smooth ramp-up / glide-to-stop instead of discrete jumps.
 
 Shortcuts are ignored while typing in an input field.
+Combinations with Ctrl / Cmd / Alt are never intercepted by the
+file-show shortcuts, so browser-native Ctrl+C / Ctrl+X / Ctrl+V
+(copy / cut / paste) keep working normally.
 When disabled, no hotkey will be triggered.
         `
-    },
-
-    enableTileModeMemory: {
-        type: 'boolean',
-        label: 'Remember tile size per folder',
-        defaultValue: true,
-        helperText: 'Stores the tile size for each folder path in localStorage and restores it on revisit.'
-    },
-
-    expireHours: {
-        type: 'number',
-        label: 'Tile memory expiry (hours)',
-        defaultValue: 24,
-        helperText: 'How long to keep per-folder tile sizes. Set to 0 to keep forever.'
-    },
-
-    serverTileSize: {
-        type: 'number',
-        label: 'Server default tile size',
-        defaultValue: 2,
-        helperText: 'Default tile size used when a folder has no remembered value.'
     }
 
 }
