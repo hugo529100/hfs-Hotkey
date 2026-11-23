@@ -1,4 +1,4 @@
-exports.repo = "Hug3O/Hotkey"
+exports.repo = "hugo529100/hfs-Hotkey"
 exports.version = 2.4
 exports.apiRequired = 8.87
 exports.hasConfig = true
