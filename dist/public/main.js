@@ -83,6 +83,64 @@
         '.dialog-backdrop.dialog-confirm',
     ].join(', ');
 
+    // ==================== 输入焦点 / 文本编辑判定 ====================
+    // Notes 等插件把编写框挂在 body 上的固定浮层（不是 HFS 对话框），
+    // 所以不能只靠「是不是文件预览 / 对话框」来判断。只要焦点（含输入法光标）
+    // 落在可编辑控件里，所有快捷键都必须暂时停用，否则左右键会被分页逻辑吃掉、
+    // 上下键会被滚动逻辑吃掉，正文里的光标就无法移动。
+    const NON_TEXT_INPUT_TYPES = new Set([
+        'checkbox', 'radio', 'button', 'submit', 'reset',
+        'image', 'range', 'color', 'file', 'hidden',
+    ]);
+
+    // Notes 插件编写框（编辑器 textarea）+ 底部输入框
+    const NOTE_EDITING_SELECTOR = [
+        '.note-edit-input',
+        '.note-input',
+        '.note-panel textarea',
+        '.note-panel input',
+        '.note-panel [contenteditable=""]',
+        '.note-panel [contenteditable="true"]',
+        '.note-panel [contenteditable="plaintext-only"]',
+    ].join(', ');
+
+    // Notes 面板（含全屏 / 移動端變體）
+    const NOTE_PANEL_SELECTOR = [
+        '.note-panel',
+        '.note-fullscreen',
+        '.note-mobile',
+    ].join(', ');
+
+    const CONTENTEDITABLE_SELECTOR = [
+        '[contenteditable=""]',
+        '[contenteditable="true"]',
+        '[contenteditable="plaintext-only"]',
+    ].join(', ');
+
+    function isTextInputLike(el) {
+        if (!el || el.nodeType !== 1) return false;
+        const tag = el.tagName.toLowerCase();
+        if (tag === 'textarea' || tag === 'select') return true;
+        if (tag === 'input') {
+            const type = (el.type || 'text').toLowerCase();
+            return !NON_TEXT_INPUT_TYPES.has(type);
+        }
+        return !!el.isContentEditable;
+    }
+
+    // 输入法组合中（中文 / 日文 / 韓文…）绝不吃键
+    function isImeEvent(e) {
+        if (!e) return false;
+        return !!(e.isComposing || e.keyCode === 229 || e.key === 'Process');
+    }
+
+    function isVisible(el) {
+        if (!el) return false;
+        const style = getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+        return el.getClientRects().length > 0;
+    }
+
     // ==================== 上下文判断 ====================
     const Context = {
         isLogin() {
@@ -113,19 +171,55 @@
         hasSubDialog() {
             return !!this.getVisibleSubDialog();
         },
-        isFormInput() {
-            const el = document.activeElement;
-            if (!el) return false;
-            const tag = el.tagName.toLowerCase();
-            if (tag === 'input') {
-                const type = (el.type || '').toLowerCase();
-                if (['checkbox','radio','button','submit','reset','image','range'].includes(type)) {
-                    return false;
+        // 取得目前承载输入焦点的可编辑控件（優先 activeElement，其次事件目标）
+        getTypingElement(e) {
+            const seen = new Set();
+            const consider = (node) => {
+                if (!node || seen.has(node)) return null;
+                seen.add(node);
+                if (node.nodeType !== 1) return null;
+                if (isTextInputLike(node)) return node;
+                if (node.closest) {
+                    const editable = node.closest(CONTENTEDITABLE_SELECTOR);
+                    if (editable) return editable;
                 }
-                return true;
+                return null;
+            };
+            const candidates = [document.activeElement];
+            if (e) {
+                candidates.push(e.target);
+                if (typeof e.composedPath === 'function') {
+                    for (const node of e.composedPath()) candidates.push(node);
+                }
             }
-            if (tag === 'textarea' || tag === 'select') return true;
-            return !!el.isContentEditable;
+            for (const node of candidates) {
+                const found = consider(node);
+                if (found) return found;
+            }
+            return null;
+        },
+        // 焦点是否在文本类控件里（input / textarea / select / contenteditable）
+        isTyping(e) {
+            return !!this.getTypingElement(e);
+        },
+        // Notes 编写框是否正在使用中：焦点在框内，或 Notes 已进入编辑模式。
+        // 编辑模式期间即使用户暂时点到别处（工具列、图片…），也要暂停快捷键，
+        // 否则左右键会触发分页导航，把正在编辑的笔记和未保存内容一起冲掉。
+        isNoteEditing(e) {
+            const typing = this.getTypingElement(e);
+            if (typing) {
+                if (typing.matches && typing.matches(NOTE_EDITING_SELECTOR)) return true;
+                if (typing.closest && typing.closest(NOTE_PANEL_SELECTOR)) return true;
+            }
+            const banner = document.querySelector('.note-editing-mode-banner');
+            if (banner && isVisible(banner)) return true;
+            const active = document.activeElement;
+            if (active && active.closest && active.closest(NOTE_PANEL_SELECTOR) &&
+                isTextInputLike(active)) return true;
+            return false;
+        },
+        isFormInput() {
+            return isTextInputLike(document.activeElement);
         },
         isMenuOpen() {
             return !!document.querySelector(MENU_CONTAINER_SELECTOR);
@@ -340,7 +434,7 @@
     }
 
     function handleFileShowKeys(e) {
-        if (Context.isFormInput()) return false;
+        if (Context.isTyping(e) || Context.isNoteEditing(e)) return false;
 
         if (e.key === 'Escape') {
             if (Context.isMenuOpen()) { closeAllMenus(); swallow(e); return true; }
@@ -624,38 +718,37 @@
     function routeKey(e) {
         if (!enabled) return;
         if (shouldSkipAll()) return;
+        // 输入法组合中（選字、拼音、注音…）一律不介入，避免抢掉候选框的按键。
+        if (isImeEvent(e)) return;
 
         if (Context.hasSubDialog()) return handleDialogKeys(e);
         if (Context.isFileShow())  return handleFileShowKeys(e);
 
         if (Context.isPlainUI()) {
-            if (e.key === 'ArrowDown') {
-                if (Context.isFormInput()) return;
-                return startHoldScroll(getPageScrollTarget, 'down', e);
+            // 焦点在可编辑控件里（Notes 编写框 / 留言框 / 搜索框 / 任意 textarea、
+            // contenteditable…）或 Notes 正处于编辑模式时，快捷键全部暂时停用：
+            // 上下左右、Home / End、PageUp / PageDown 都交还给输入控件本身。
+            if (Context.isTyping(e) || Context.isNoteEditing(e)) {
+                endScroll();
+                return;
             }
-            if (e.key === 'ArrowUp') {
-                if (Context.isFormInput()) return;
-                return startHoldScroll(getPageScrollTarget, 'up', e);
-            }
+            if (e.key === 'ArrowDown') return startHoldScroll(getPageScrollTarget, 'down', e);
+            if (e.key === 'ArrowUp')   return startHoldScroll(getPageScrollTarget, 'up', e);
             if (e.key === 'ArrowRight') return navigatePaging('right', e);
             if (e.key === 'ArrowLeft')  return navigatePaging('left', e);
             if (e.key === 'PageUp') {
-                if (Context.isFormInput()) return;
                 if (navigatePagingStep('pageUp', e)) return;
                 return;
             }
             if (e.key === 'PageDown') {
-                if (Context.isFormInput()) return;
                 if (navigatePagingStep('pageDown', e)) return;
                 return;
             }
             if (e.key === 'Home') {
-                if (Context.isFormInput()) return;
                 if (navigatePagingEdge('home', e)) return;
                 return;
             }
             if (e.key === 'End') {
-                if (Context.isFormInput()) return;
                 if (navigatePagingEdge('end', e)) return;
                 return;
             }
@@ -670,7 +763,8 @@
         if (shouldSkipAll()) return;
         if (Context.isFileShow()) return;
         if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-        if (Context.isFormInput()) return;
+        if (isImeEvent(e)) return;
+        if (Context.isTyping(e) || Context.isNoteEditing(e)) return;
         if (e.repeat) {
             const dir = e.key === 'ArrowDown' ? 'down' : 'up';
             if (ScrollEngine.target) repeatScroll(dir, e);
@@ -783,7 +877,8 @@
             e.key === 'Home' || e.key === 'End' || e.key === ' ') {
             return;
         }
-        if (Context.isFormInput()) return;
+        // 编辑中（含 Notes 编写框）不套用砖块尺寸，避免打字时误触改版。
+        if (Context.isTyping(e) || Context.isNoteEditing(e)) return;
 
         let target = null;
         if (e.key === '0') {
@@ -1001,9 +1096,14 @@ div.dialog[aria-modal="true"] .hotkey-user-button { margin-top: 1em; }
             subDialog:Context.hasSubDialog(),
             menuOpen: Context.isMenuOpen(),
             input:    Context.isFormInput(),
+            typing:   Context.isTyping(null),
+            notesEditing: Context.isNoteEditing(null),
             plainUI:  Context.isPlainUI(),
             paging:   !!getPagingNav(),
         }),
+        // 方便在 Console 檢查：目前是否有輸入焦點 / Notes 是否在編輯
+        isTyping: () => Context.isTyping(null),
+        isNoteEditing: () => Context.isNoteEditing(null),
     };
 
     console.log(LOG, 'installed');

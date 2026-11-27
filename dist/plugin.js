@@ -1,9 +1,9 @@
 exports.repo = "hugo529100/hfs-Hotkey"
-exports.version = 2.5
+exports.version = 2.6
 exports.apiRequired = 8.87
 exports.hasConfig = true
 exports.frontend_js = 'main.js'
-exports.description = "Unified keyboard helper for HFS (Enter/Esc, comment Enter saves without closing preview, file-show shortcuts, smooth arrow scrolling, paging navigation incl. PageUp/PageDown/Home/End, and Ctrl+0..9 tile size). Tile-size memory (per folder, expiry, server default) is provided by the Tiles-plus plugin."
+exports.description = "Unified keyboard helper for HFS: dialog keys (Enter/Esc), file-show shortcuts, smooth arrow scrolling, paging navigation and Ctrl+0..9 tile size. Shortcuts pause while typing or during IME composition."
 
 exports.config = {
 
@@ -61,7 +61,11 @@ Tile size (apply only):
 Scrolling uses a rAF-based velocity engine, so holding an arrow key
 produces a smooth ramp-up / glide-to-stop instead of discrete jumps.
 
-Shortcuts are ignored while typing in an input field.
+Shortcuts pause while typing (input / textarea / contenteditable / IME
+composition). In particular, when the caret is active inside the Notes
+plugin's editor (or Notes is in edit mode), every shortcut is suspended
+so Up / Down / Left / Right / Home / End move the caret inside the text
+instead of scrolling the page or walking the paging bar.
 Combinations with Ctrl / Cmd / Alt are never intercepted by the
 file-show shortcuts, so browser-native Ctrl+C / Ctrl+X / Ctrl+V
 (copy / cut / paste) keep working normally.

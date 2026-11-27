@@ -225,7 +225,8 @@ body.theme-dark .hotkey-help-body::-webkit-scrollbar-thumb {
                 note('On macOS use <kbd>Cmd</kbd> instead of Ctrl. This shortcut only <b>applies</b> the size and refreshes the #option-tile-size control. Remembering it per folder and the expiry time are handled by the <b>Tiles-plus</b> plugin; folders without a remembered value use HFS\'s config.yaml tile_size.'),
             ]),
             section('Tips', [
-                note('Shortcuts are ignored while typing in an input field.'),
+                note('Shortcuts pause while typing: <kbd>input</kbd> / <kbd>textarea</kbd> / <kbd>contenteditable</kbd>, and during IME (Chinese / Japanese / Korean) composition.'),
+                note('When the caret is inside the <b>Notes</b> editor (or Notes is in edit mode), every shortcut is suspended, so <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> <kbd>Home</kbd> <kbd>End</kbd> move the caret in the text instead of scrolling or changing page.'),
                 note('Scrolling uses a rAF velocity engine, so holding an arrow key ramps up and glides to stop instead of jumping.'),
                 note('Press <kbd>Esc</kbd> or click outside to close this help.'),
             ]),
