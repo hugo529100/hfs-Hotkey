@@ -1,5 +1,5 @@
 exports.repo = "hugo529100/hfs-Hotkey"
-exports.version = 2.6
+exports.version = 2.8
 exports.apiRequired = 8.87
 exports.hasConfig = true
 exports.frontend_js = 'main.js'
